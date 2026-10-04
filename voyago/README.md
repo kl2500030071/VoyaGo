@@ -259,37 +259,7 @@ The old bookings-management screen has been replaced with:
 
 Filters match the redirect audit and export the filtered rows to `voyago-redirects.csv`.
 
-## Viva notes — 10 faculty questions
 
-### 1. What problem does VoyaGo solve?
-Indian travellers often compare the same trip across many sites. VoyaGo puts those demo comparisons in one place and sends the traveller to the real partner for final booking.
-
-### 2. Why is VoyaGo not booking the ticket itself?
-Because the project is intentionally a price-comparison platform. It avoids storing payment information and avoids pretending to be a travel inventory provider.
-
-### 3. Why are prices not live?
-Live prices require partner APIs/affiliate feeds, commercial agreements, backend infrastructure and real-time availability. This project must remain pure frontend, so it uses seeded mock data.
-
-### 4. How are comparison prices calculated?
-`compare()` combines base fare, convenience fee, deterministic partner markup, taxes and a deterministic demo coupon. The result is stable for the current app load.
-
-### 5. How do you prevent random prices changing every time a button is clicked?
-The comparison uses a seeded pseudo-random calculation derived from the item ID, partner ID and app-load seed. The same item/partner stays stable during that app load.
-
-### 6. How do you protect users from free-text city mistakes?
-The reusable `ui.js` combobox validates against the city set derived from inventory. Invalid free text gets a custom validity error and cannot be submitted.
-
-### 7. Why use localStorage?
-The project must run as static files without a backend. localStorage gives persistence for users, inventory, trips, redirects, alerts, searches and settings inside the browser.
-
-### 8. How does the self-healing itinerary work?
-The flight is the timing anchor. When its arrival moves, the tested itinerary engine recalculates cab pickup and hotel check-in and writes a user alert.
-
-### 9. How does the admin broadcast delay work with multiple users?
-The admin selects a flight number and delay. Every confirmed saved flight with that number is updated, downstream trip times are rebuilt, and each affected user receives a separate alert.
-
-### 10. What would you build next for production?
-A backend service, secure authentication, real partner/affiliate APIs, real availability, server-side price caching, rate limiting, consent/privacy controls, monitoring and secure redirect attribution.
 
 ## Quality checklist
 
@@ -314,4 +284,3 @@ Validated during the final build:
 - [x] No payment form, card/UPI/wallet flow or Luhn validation remains in the user UI.
 - [x] Project uses relative local script/style paths and no backend.
 
-For a college demonstration, use Live Server and keep the browser console open while walking through the quality-gate flow.
