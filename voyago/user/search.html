@@ -1,0 +1,401 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Compare travel prices · VoyaGo</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/tokens.css"><link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/effects.css"><link rel="stylesheet" href="../css/pages.css"></head><body><header class="nav"><div class="container nav-inner"><a class="brand" href="dashboard.html">Voya<span>Go</span></a><nav class="nav-links"><a href="dashboard.html">Home</a><a class="active" href="search.html">Compare</a><a href="trips.html">My Trips</a><a href="profile.html">Profile</a><button data-theme-toggle class="btn ghost">🌙</button><button data-logout class="btn ghost">Logout</button></nav></div></header><main class="page"><div class="container"><div class="row between wrap"><div><span class="eyebrow">Travel price comparison</span><h1 style="font-size:42px">One trip. Every major option.</h1><p>Compare the same trip across platforms, see the true demo total, then book on the partner site.</p></div><a href="trips.html" class="btn ghost">My Trips</a></div><div class="card" style="margin-top:22px"><div class="tabs" id="tabs" role="tablist" aria-label="Travel type"><button class="tab active" data-type="flight" role="tab" aria-selected="true">Flights</button><button class="tab" data-type="train" role="tab" aria-selected="false">Trains</button><button class="tab" data-type="hotel" role="tab" aria-selected="false">Hotels</button><button class="tab" data-type="cab" role="tab" aria-selected="false">Cabs</button></div><div class="form-grid" style="margin-top:16px"><label id="fromWrap">From<div class="combo-slot"><input id="from" class="input" value="Delhi" autocomplete="off" aria-label="From city"></div></label><label id="toWrap">To<div class="combo-slot"><input id="to" class="input" value="Mumbai" autocomplete="off" aria-label="To city"></div></label><label id="cityWrap" class="hidden">City<div class="combo-slot"><input id="city" class="input" value="Mumbai" autocomplete="off" aria-label="City"></div></label><label>Travel date<input id="travelDate" class="input" type="date" required></label><label>Max total<input id="max" class="input" type="number" value="60000" min="1"></label><label id="airWrap">Airline<select id="airline" class="input"><option value="">Any airline</option><option>IndiGo</option><option>Air India</option><option>Akasa Air</option><option>SpiceJet</option></select></label><label id="stopWrap">Stops<select id="stops" class="input"><option value="">Any</option><option value="0">Non-stop</option><option value="1">1 stop</option></select></label><label id="ratingWrap" class="hidden">Min rating<select id="rating" class="input"><option value="">Any</option><option value="4">4+</option><option value="4.5">4.5+</option></select></label><label id="classWrap" class="hidden">Train class<select id="className" class="input"><option>SL</option><option>3A</option><option>2A</option><option>1A</option></select></label><label>Sort<select id="sort" class="input"><option value="price">Lowest total</option><option value="rating">Highest rating</option><option value="fast">Fastest</option></select></label><button id="swapBtn" class="btn ghost" type="button">⇄ Swap</button><button id="searchBtn" class="btn primary" type="button">Compare prices</button></div><p class="muted" style="margin-top:12px;font-size:13px">Approximate train timings are shown for demo purposes. Final availability and price are confirmed on the partner site.</p></div><div class="row between wrap" style="margin-top:24px"><h2 id="resultTitle">Results</h2><span id="count" class="badge" aria-live="polite">0 options</span></div><div id="results" class="result-list" aria-live="polite" style="margin-top:14px"></div><div id="comparePanel" style="margin-top:18px"></div></div></main><script src="../js/storage.js"></script><script src="../js/auth.js"></script><script src="../js/guard.js"></script><script src="../js/ui.js"></script><script src="../js/pricing.js"></script><script src="../js/partners.js"></script><script src="../js/compare.js"></script><script src="../js/api-mock.js"></script><script src="../js/itinerary.js"></script><script>
+const s=initPage('user');
+const tabsEl=document.getElementById('tabs');
+const fromEl=document.getElementById('from');
+const toEl=document.getElementById('to');
+const cityEl=document.getElementById('city');
+const travelDateEl=document.getElementById('travelDate');
+const maxEl=document.getElementById('max');
+const airlineEl=document.getElementById('airline');
+const stopsEl=document.getElementById('stops');
+const ratingEl=document.getElementById('rating');
+const classNameEl=document.getElementById('className');
+const sortEl=document.getElementById('sort');
+const swapBtnEl=document.getElementById('swapBtn');
+const searchBtnEl=document.getElementById('searchBtn');
+const fromWrapEl=document.getElementById('fromWrap');
+const toWrapEl=document.getElementById('toWrap');
+const cityWrapEl=document.getElementById('cityWrap');
+const airWrapEl=document.getElementById('airWrap');
+const stopWrapEl=document.getElementById('stopWrap');
+const ratingWrapEl=document.getElementById('ratingWrap');
+const classWrapEl=document.getElementById('classWrap');
+const resultTitleEl=document.getElementById('resultTitle');
+const countEl=document.getElementById('count');
+const resultsEl=document.getElementById('results');
+const comparePanelEl=document.getElementById('comparePanel');
+
+const TOMORROW=()=>new Date(Date.now()+86400000).toISOString().slice(0,10);
+let type='flight';
+let fromWidget;
+let toWidget;
+let cityWidget;
+let cache=new Map();
+let searchTimer=0;
+let searchToken=0;
+let updatingFields=false;
+
+const defaults={
+  flight:{from:'Delhi',to:'Mumbai',city:'Mumbai',max:60000,className:'SL',sort:'price'},
+  train:{from:'Delhi',to:'Mumbai',city:'Mumbai',max:10000,className:'SL',sort:'price'},
+  hotel:{from:'Delhi',to:'Mumbai',city:'Mumbai',max:20000,className:'SL',sort:'price'},
+  cab:{from:'Delhi',to:'Mumbai',city:'Mumbai',max:8000,className:'SL',sort:'price'}
+};
+
+function setupCombos(){
+  fromWidget=createCityCombobox(fromEl,{
+    cities:getVoyagoCities('flight'),
+    onChange:value=>{
+      if(updatingFields)return;
+      updateCityOptions();
+      scheduleSearch();
+    }
+  });
+  toWidget=createCityCombobox(toEl,{
+    cities:getVoyagoCities('flight','Delhi'),
+    onChange:()=>{if(!updatingFields)scheduleSearch()}
+  });
+  cityWidget=createCityCombobox(cityEl,{
+    cities:getVoyagoCities(),
+    onChange:()=>{if(!updatingFields)scheduleSearch()}
+  });
+}
+
+function setTabButtons(){
+  tabsEl.querySelectorAll('[data-type]').forEach(button=>{
+    const active=button.dataset.type===type;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',String(active));
+  });
+}
+
+function updateCityOptions(){
+  const fromCities=getVoyagoCities(type==='train'?'train':'flight');
+  fromWidget.setOptions(fromCities,true);
+  if(type==='flight'){
+    const destinations=getVoyagoCities('flight',fromEl.value);
+    toWidget.setOptions(destinations,false);
+    if(destinations.includes(toEl.value)){
+      toWidget.choose(toEl.value);
+    }else if(destinations.length){
+      toWidget.choose(destinations[0]);
+    }
+  }else if(type==='train'){
+    const rail=getVoyagoCities('train');
+    toWidget.setOptions(rail,true);
+    if(!rail.includes(toEl.value)&&rail.length)toWidget.choose(rail[0]);
+  }
+  cityWidget.setOptions(getVoyagoCities(),true);
+}
+
+function toggleFields(){
+  const flightLike=type==='flight'||type==='train';
+  fromWrapEl.classList.toggle('hidden',!flightLike);
+  toWrapEl.classList.toggle('hidden',!flightLike);
+  cityWrapEl.classList.toggle('hidden',flightLike);
+  airWrapEl.classList.toggle('hidden',type!=='flight');
+  stopWrapEl.classList.toggle('hidden',type!=='flight');
+  ratingWrapEl.classList.toggle('hidden',type!=='hotel');
+  classWrapEl.classList.toggle('hidden',type!=='train');
+  swapBtnEl.classList.toggle('hidden',!flightLike);
+  maxEl.value=defaults[type].max;
+}
+
+function applyTabDefaults(){
+  const d=defaults[type];
+  updatingFields=true;
+  fromEl.value=d.from;
+  toEl.value=d.to;
+  cityEl.value=d.city;
+  travelDateEl.value=TOMORROW();
+  maxEl.value=d.max;
+  airlineEl.value='';
+  stopsEl.value='';
+  ratingEl.value='';
+  classNameEl.value=d.className;
+  sortEl.value=d.sort;
+  toggleFields();
+  updateCityOptions();
+  if(type==='flight'||type==='train'){
+    const fromOptions=type==='train'?getVoyagoCities('train'):getVoyagoCities('flight');
+    fromWidget.setOptions(fromOptions,false);
+    fromWidget.choose(d.from);
+    if(type==='flight'){
+      toWidget.setOptions(getVoyagoCities('flight',d.from),false);
+    }else{
+      toWidget.setOptions(getVoyagoCities('train'),false);
+    }
+    if((type==='train'?getVoyagoCities('train'):getVoyagoCities('flight',d.from)).includes(d.to))toWidget.choose(d.to);
+  }else{
+    cityWidget.setOptions(getVoyagoCities(),false);
+    cityWidget.choose(d.city);
+  }
+  updatingFields=false;
+}
+
+function currentFilters(){
+  const filters={travelDate:travelDateEl.value,max:maxEl.value};
+  if(type==='flight'){
+    Object.assign(filters,{from:fromEl.value,to:toEl.value,airline:airlineEl.value,stops:stopsEl.value});
+  }else if(type==='train'){
+    Object.assign(filters,{from:fromEl.value,to:toEl.value,className:classNameEl.value});
+  }else{
+    Object.assign(filters,{city:cityEl.value});
+  }
+  if(type==='hotel')filters.rating=ratingEl.value;
+  return filters;
+}
+
+function filterKey(){
+  return `${type}:${JSON.stringify(currentFilters())}`;
+}
+
+function validForm(){
+  const ok=Boolean(travelDateEl.value)&&(
+    type==='hotel'||type==='cab'
+      ?cityWidget.isValid()
+      :(fromWidget.isValid()&&toWidget.isValid())
+  );
+  if(!ok)toast('Choose cities from the dropdown list.');
+  return ok;
+}
+
+function sortItems(items){
+  return items.sort((x,y)=>{
+    if(sortEl.value==='rating')return Number(y.rating||0)-Number(x.rating||0);
+    if(sortEl.value==='fast')return Number(x.durationMinutes||0)-Number(y.durationMinutes||0);
+    return Number(x.price||0)-Number(y.price||0);
+  });
+}
+
+function skeletonHtml(){
+  return `<article class="card" aria-hidden="true"><div class="skeleton" style="height:20px;width:32%;margin-bottom:14px"></div><div class="skeleton" style="height:28px;width:62%;margin-bottom:12px"></div><div class="skeleton" style="height:16px;width:78%;margin-bottom:12px"></div><div class="skeleton" style="height:42px;width:100%"></div></article><article class="card" aria-hidden="true"><div class="skeleton" style="height:20px;width:28%;margin-bottom:14px"></div><div class="skeleton" style="height:28px;width:54%;margin-bottom:12px"></div><div class="skeleton" style="height:16px;width:72%;margin-bottom:12px"></div><div class="skeleton" style="height:42px;width:100%"></div></article><article class="card" aria-hidden="true"><div class="skeleton" style="height:20px;width:36%;margin-bottom:14px"></div><div class="skeleton" style="height:28px;width:68%;margin-bottom:12px"></div><div class="skeleton" style="height:16px;width:66%;margin-bottom:12px"></div><div class="skeleton" style="height:42px;width:100%"></div></article>`;
+}
+
+function showSkeleton(){
+  countEl.textContent='Searching…';
+  resultsEl.innerHTML=skeletonHtml();
+}
+
+function alternativeModes(){
+  const inv=Store.read(KEYS.inventory,{});
+  const flights=Array.isArray(inv.flights)?inv.flights:[];
+  const trains=Array.isArray(inv.trains)?inv.trains:[];
+  const hotels=Array.isArray(inv.hotels)?inv.hotels:[];
+  const cabs=Array.isArray(inv.cabs)?inv.cabs:[];
+  const from=fromEl.value;
+  const to=toEl.value;
+  const city=type==='hotel'||type==='cab'?cityEl.value:to;
+  const modes=[];
+  if(type!=='flight'&&flights.some(x=>x.from===from&&x.to===to))modes.push('flight');
+  if(type!=='train'&&trains.some(x=>x.from===from&&x.to===to))modes.push('train');
+  if(type!=='hotel'&&hotels.some(x=>x.city===city))modes.push('hotel');
+  if(type!=='cab'&&cabs.some(x=>x.city===city))modes.push('cab');
+  return modes;
+}
+
+function suggestedDestinations(){
+  const candidates=getVoyagoCities().filter(c=>c!==fromEl.value&&c!==toEl.value&&c!==cityEl.value);
+  return candidates.slice(0,3);
+}
+
+function emptyHtml(){
+  const route=type==='hotel'||type==='cab'
+    ?cityEl.value
+    :`${fromEl.value} → ${toEl.value}`;
+  const title=`No ${type==='flight'?'direct flights':type==='train'?'direct trains':type==='hotel'?'hotels':'cabs'} ${route}`;
+  const alts=alternativeModes();
+  const alternativeButtons=alts.length
+    ?`<div class="row wrap" style="justify-content:center;margin-top:16px">${alts.map(t=>`<button class="btn ghost" data-alt-type="${t}">Try ${t==='flight'?'flights':t==='train'?'trains':t==='hotel'?'hotels':'cabs'}</button>`).join('')}</div>`
+    :'';
+  const suggestions=suggestedDestinations();
+  return `<div class="empty"><div style="font-size:42px">✦</div><h3>${escapeHtml(title)}</h3><p>Try another route, widen the maximum total, or switch to a mode that has matching demo data.</p>${alternativeButtons}${suggestions.length?`<div style="margin-top:18px"><strong>Suggested destinations</strong><div class="row wrap" style="justify-content:center;margin-top:9px">${suggestions.map(c=>`<button class="btn ghost" data-destination="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`:''}</div>`;
+}
+
+function itemCard(item){
+  const base=getTrueTotal(item.price||0).total;
+  const meta=item.type==='flight'
+    ?`${item.airline} · ${item.flightNo} · ${item.depart}–${item.arrive} · ${item.duration}`
+    :item.type==='train'
+      ?`${item.name} · ${item.trainNo} · ${item.depart}–${item.arrive} · approximate`
+      :item.type==='hotel'
+        ?`${item.city} · ${Number(item.rating||0).toFixed(1)}★ · ${(item.amenities||[]).slice(0,3).join(' · ')}`
+        :`${item.brand||''} ${item.kind||''} · ${item.city} · ${item.eta} min ETA`;
+  const title=item.type==='hotel'?item.name:item.type==='cab'?item.kind:item.name||`${item.from} → ${item.to}`;
+  return `<article class="card result-card"><div><div class="row wrap"><span class="badge">${escapeHtml(item.type)}</span>${item.type==='flight'&&item.stops===0?'<span class="badge success">Non-stop</span>':''}${item.type==='train'?`<span class="badge warning">${escapeHtml(item.selectedClass||'SL')}</span>`:''}</div><h3 style="margin-top:10px">${escapeHtml(title)}</h3><p>${escapeHtml(meta)}</p><p class="muted">${item.type==='hotel'?'Check-in 14:00':item.type==='flight'||item.type==='train'?`Travel ${escapeHtml(item.travelDate)}`:escapeHtml(item.travelDate)}</p></div><div style="min-width:190px"><div class="row between"><strong>${formatINR(base)}</strong><span class="badge">VoyaGo demo total</span></div><button class="btn primary full" style="margin-top:12px" data-compare="${escapeHtml(item.id)}">Compare prices</button><button class="btn ghost full" style="margin-top:8px" data-wish="${escapeHtml(item.id)}">♡ Wishlist</button></div></article>`;
+}
+
+function wireResultActions(items){
+  resultsEl.querySelectorAll('[data-compare]').forEach(btn=>btn.onclick=()=>{
+    const item=items.find(x=>x.id===btn.dataset.compare);
+    if(!item)return;
+    renderComparisonPanel(item,s,comparePanelEl,(selected,result)=>saveToTrip(selected,result));
+  });
+  resultsEl.querySelectorAll('[data-wish]').forEach(btn=>btn.onclick=()=>{
+    const item=items.find(x=>x.id===btn.dataset.wish);
+    if(!item)return;
+    const exists=Store.read(KEYS.wishlist).some(w=>w.userId===s.id&&w.itemId===item.id);
+    if(exists){toast('Already in wishlist');return}
+    Store.patch(KEYS.wishlist,a=>[
+      {id:uid('W'),userId:s.id,itemId:item.id,itemName:item.name||item.kind||`${item.from} → ${item.to}`,price:getTrueTotal(item.price||0).total,createdAt:nowISO()},
+      ...a
+    ]);
+    toast('Added to wishlist');
+  });
+  resultsEl.querySelectorAll('[data-alt-type]').forEach(btn=>btn.onclick=()=>switchTab(btn.dataset.altType));
+  resultsEl.querySelectorAll('[data-destination]').forEach(btn=>btn.onclick=()=>{
+    const destination=btn.dataset.destination;
+    if(type==='hotel'||type==='cab'){
+      updatingFields=true;
+      cityWidget.choose(destination);
+      updatingFields=false;
+      scheduleSearch(true);
+      return;
+    }
+    if(type==='flight'||type==='train'){
+      const destinations=getVoyagoCities(type==='train'?'train': 'flight',fromEl.value);
+      if(destinations.includes(destination)){
+        updatingFields=true;
+        toWidget.choose(destination);
+        updatingFields=false;
+        scheduleSearch(true);
+      }else{
+        switchTab('flight');
+        updatingFields=true;
+        toWidget.setOptions(getVoyagoCities('flight',fromEl.value),false);
+        const next=getVoyagoCities('flight',fromEl.value)[0];
+        if(next)toWidget.choose(next);
+        updatingFields=false;
+        scheduleSearch(true);
+      }
+    }
+  });
+}
+
+function renderResults(items,key){
+  const sorted=sortItems(items.slice());
+  cache.set(key,sorted.slice());
+  lastResults=sorted;
+  countEl.textContent=`${sorted.length} options`;
+  resultTitleEl.textContent=`${type[0].toUpperCase()+type.slice(1)} options`;
+  resultsEl.innerHTML=sorted.length?sorted.map(itemCard).join(''):emptyHtml();
+  wireResultActions(sorted);
+}
+
+let lastResults=[];
+
+async function runSearch({force=false}={}){
+  if(!s)return;
+  if(!validForm()){
+    searchBtnEl.disabled=false;
+    searchBtnEl.textContent='Compare prices';
+    return;
+  }
+  const key=filterKey();
+  if(!force&&cache.has(key)){
+    comparePanelEl.innerHTML='';
+    renderResults(cache.get(key),key);
+    searchBtnEl.disabled=false;
+    searchBtnEl.textContent='Compare prices';
+    return;
+  }
+  const token=++searchToken;
+  searchBtnEl.disabled=true;
+  searchBtnEl.textContent='Searching…';
+  comparePanelEl.innerHTML='';
+  showSkeleton();
+  const filters=currentFilters();
+  let data=[];
+  try{
+    if(type==='flight')data=await searchFlights(filters);
+    else if(type==='train')data=await searchTrains(filters);
+    else if(type==='hotel')data=await searchHotels(filters);
+    else data=await searchCabs(filters);
+  }catch{
+    data=[];
+  }
+  if(token!==searchToken)return;
+  const sorted=sortItems(data);
+  lastResults=sorted;
+  sorted.forEach(item=>{
+    const c=compare(item);
+    if(c.cheapest)checkPriceAlerts(s.id,item,c.cheapest.price);
+  });
+  recordSearch(s.id,type,filters,sorted.length);
+  renderResults(sorted,key);
+  searchBtnEl.disabled=false;
+  searchBtnEl.textContent='Compare prices';
+}
+
+function scheduleSearch(force=true){
+  if(updatingFields||!s)return;
+  searchToken++;
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>runSearch({force}),300);
+}
+
+function switchTab(nextType){
+  if(!defaults[nextType])return;
+  type=nextType;
+  searchToken++;
+  clearTimeout(searchTimer);
+  setTabButtons();
+  applyTabDefaults();
+  runSearch({force:false});
+}
+
+swapBtnEl.onclick=()=>swapCityComboboxes(fromEl,toEl,{a:fromWidget,b:toWidget});
+
+tabsEl.onclick=e=>{
+  const b=e.target.closest('[data-type]');
+  if(!b)return;
+  switchTab(b.dataset.type);
+};
+
+fromEl.addEventListener('input',()=>{if(!updatingFields)scheduleSearch(true)});
+toEl.addEventListener('input',()=>{if(!updatingFields)scheduleSearch(true)});
+cityEl.addEventListener('input',()=>{if(!updatingFields)scheduleSearch(true)});
+[travelDateEl,maxEl,airlineEl,stopsEl,ratingEl,classNameEl,sortEl].forEach(el=>{
+  el.addEventListener('input',()=>scheduleSearch(true));
+  el.addEventListener('change',()=>scheduleSearch(true));
+});
+
+searchBtnEl.onclick=()=>runSearch({force:true});
+
+setupCombos();
+if(s){
+  applyTabDefaults();
+  runSearch({force:false});
+}
+
+function saveToTrip(item,result){
+  let saved=Store.read(KEYS.bookings).find(b=>b.userId===s.id&&b.itemId===item.id&&b.status==='Confirmed');
+  if(!saved){
+    if(item.type==='train'){
+      const dep=flightDepartureISO(item),arr=flightArrivalISO(item);
+      saved={id:uid('VG'),userId:s.id,type:'train',itemId:item.id,item:{...item},traveller:{name:s.name,email:s.email},paymentMethod:'partner-redirect',price:getTrueTotal(item.price||0),status:'Confirmed',createdAt:nowISO(),refund:0,refundRate:0,timeline:{departureAt:dep,arrivalAt:arr,originalArrivalAt:arr,delayMinutes:0,note:'Approximate train timing'},eventAt:dep};
+    }else{
+      saved=createBooking(s,item,{name:s.name,email:s.email},'partner-redirect');
+    }
+    saveBooking(saved);
+  }
+  const trips=userTrips(s.id);
+  if(!trips.length){
+    const t=createTrip(s.id,saved);
+    toast(`Saved to ${t.name}`);
+    return;
+  }
+  const body=`<p>Choose an existing trip or create a new trip for this ${escapeHtml(item.type)}.</p><div class="grid" style="margin-top:14px">${trips.map(t=>`<button class="btn ghost" data-trip="${escapeHtml(t.id)}" style="text-align:left"><strong>${escapeHtml(t.name)}</strong><br><small>${t.bookingIds.length} saved item(s)</small></button>`).join('')}</div><button class="btn primary full" id="newTripBtn" style="margin-top:14px">Create Trip to ${escapeHtml(destinationForBooking(saved))}</button>`;
+  const m=modal('Save to My Trips',body);
+  m.querySelectorAll('[data-trip]').forEach(btn=>btn.onclick=()=>{
+    addBookingToTrip(s.id,saved.id,btn.dataset.trip);
+    m.remove();
+    toast('Saved to trip');
+  });
+  m.querySelector('#newTripBtn').onclick=()=>{
+    createTrip(s.id,saved);
+    m.remove();
+    toast('New trip created');
+  };
+}
+</script></body></html>
