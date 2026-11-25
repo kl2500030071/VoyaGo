@@ -1,3 +1,7 @@
+import RouteHacker from './features/routeHacker/RouteHacker';
+import ScamShield from './features/scamShield/ScamShield';
+import VerifiedBadge from './features/scamShield/VerifiedBadge';
+
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -20,7 +24,10 @@ import {
   Trash2,
   ShieldCheck,
   ArrowLeftRight,
-  Bell
+  Bell,
+  MapPinned,
+  Shield,
+  CalendarSync
 } from 'lucide-react';
 
 import './style.css';
@@ -585,12 +592,17 @@ function App() {
         ['/admin/users', 'Users', Users],
         ['/admin/bookings', 'Bookings', Ticket],
         ['/admin/partners', 'Partners', ShieldCheck],
-        ['/admin/reports', 'Reports', ChartNoAxesCombined]
+        ['/admin/reports', 'Reports', ChartNoAxesCombined],
+        ['/admin/route-hacker', 'Route Hacker', MapPinned],
+        ['/admin/scam-shield', 'Scam Shield', Shield]
       ]
     : [
         ['/user/dashboard', 'Dashboard', LayoutDashboard],
         ['/user/search', 'Compare travel', Search],
         ['/user/trips', 'My Trips', Ticket],
+        ['/user/itinerary', 'Itinerary', CalendarSync],
+        ['/user/route-hacker', 'Route Hacker', MapPinned],
+        ['/user/scam-shield', 'Scam Shield', Shield],
         ['/user/profile', 'Profile', UserRound]
       ];
 
@@ -711,6 +723,35 @@ function App() {
   );
 
   const renderPage = () => {
+
+  // Public feature pages
+  if (route === '/route-hacker') {
+    return <RouteHacker />;
+  }
+
+  if (route === '/scam-shield') {
+    return <ScamShield />;
+  }
+
+  // Authenticated feature pages (inside shell)
+  if (route === '/user/route-hacker' || route === '/admin/route-hacker') {
+    return shell(<RouteHacker />);
+  }
+
+  if (route === '/user/scam-shield' || route === '/admin/scam-shield') {
+    return shell(<ScamShield />);
+  }
+
+  // Self-Healing Itinerary
+  if (route === '/user/itinerary') {
+    return shell(<SelfHealingItinerary
+      bookings={userBookings}
+      inventory={inventory}
+      onRemove={removeTrip}
+      onSearch={() => go('/user/search')}
+      notify={notify}
+    />);
+  }
 
   // Route protection
 
@@ -890,6 +931,14 @@ function App() {
             <nav className="nav-links">
 
               <a href="#features">Features</a>
+
+              <a onClick={() => go('/route-hacker')}>
+                Route Hacker
+              </a>
+
+              <a onClick={() => go('/scam-shield')}>
+                Scam Shield
+              </a>
 
               <a onClick={() => go('/login')}>
                 Log in
@@ -1603,7 +1652,7 @@ function App() {
                           rel="noopener noreferrer"
                           onClick={() => recordRedirect(p, itemWithPrice, mode)}
                         >
-                          Continue to {p.name} ↗
+                          Continue to {p.name} ↗ <VerifiedBadge url={p.url} />
                         </a>
                       ))}
 
@@ -2492,6 +2541,214 @@ function App() {
           {toast}
         </div>
       )}
+    </>
+  );
+}
+
+function SelfHealingItinerary({ bookings, inventory, onRemove, onSearch, notify }) {
+  // Build a timeline from saved trips, detect conflicts and suggest fixes
+
+  const trips = [...bookings].sort((a, b) => {
+    const dateA = a.item?.depart || a.createdAt || '';
+    const dateB = b.item?.depart || b.createdAt || '';
+    return dateA.localeCompare(dateB);
+  });
+
+  // Detect issues
+  const issues = [];
+  const resolvedKey = 'voyago_itinerary_resolved';
+  const [resolved, setResolved] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(resolvedKey) || '[]'); }
+    catch { return []; }
+  });
+
+  const markResolved = (issueId) => {
+    const next = [...resolved, issueId];
+    setResolved(next);
+    localStorage.setItem(resolvedKey, JSON.stringify(next));
+    notify('Issue marked as resolved');
+  };
+
+  trips.forEach((trip, i) => {
+    const item = trip.item;
+    if (!item) return;
+
+    // Check if the item still exists in inventory
+    const key = { flight: 'flights', train: 'trains', hotel: 'hotels', cab: 'cabs' }[trip.type];
+    const invList = Array.isArray(inventory[key]) ? inventory[key] : [];
+    const stillExists = invList.some(x => x.id === item.id);
+
+    if (!stillExists) {
+      issues.push({
+        id: `missing-${trip.id}`,
+        type: 'unavailable',
+        severity: 'high',
+        tripId: trip.id,
+        message: `${item.name || item.airline || 'Item'} (${trip.type}) is no longer available in inventory.`,
+        suggestion: 'Search for an alternative or remove this saved trip.',
+        icon: '⚠️'
+      });
+    }
+
+    // Check for time overlap with next trip
+    if (i < trips.length - 1) {
+      const next = trips[i + 1];
+      if (item.arrive && next.item?.depart) {
+        const arriveH = parseInt(item.arrive?.split(':')[0] || '0');
+        const arriveM = parseInt(item.arrive?.split(':')[1] || '0');
+        const departH = parseInt(next.item.depart?.split(':')[0] || '0');
+        const departM = parseInt(next.item.depart?.split(':')[1] || '0');
+        const arriveTotal = arriveH * 60 + arriveM;
+        const departTotal = departH * 60 + departM;
+
+        if (departTotal > 0 && arriveTotal > 0 && departTotal - arriveTotal < 60 && departTotal - arriveTotal >= 0) {
+          issues.push({
+            id: `tight-${trip.id}-${next.id}`,
+            type: 'tight-connection',
+            severity: 'medium',
+            tripId: trip.id,
+            message: `Only ${departTotal - arriveTotal} min between ${item.name || item.airline || trip.type} arrival and ${next.item?.name || next.item?.airline || next.type} departure.`,
+            suggestion: 'Consider adding buffer time or booking a later departure.',
+            icon: '⏱️'
+          });
+        }
+
+        if (departTotal > 0 && arriveTotal > 0 && departTotal < arriveTotal) {
+          issues.push({
+            id: `overlap-${trip.id}-${next.id}`,
+            type: 'overlap',
+            severity: 'high',
+            tripId: trip.id,
+            message: `${item.name || item.airline || trip.type} arrives after ${next.item?.name || next.item?.airline || next.type} departs — schedule conflict.`,
+            suggestion: 'Rearrange or replace one of these trips.',
+            icon: '🔴'
+          });
+        }
+      }
+
+      // Check city mismatch (arriving at different city than next departure)
+      if (item.to && next.item?.from && item.to !== next.item.from) {
+        issues.push({
+          id: `gap-${trip.id}-${next.id}`,
+          type: 'city-gap',
+          severity: 'medium',
+          tripId: trip.id,
+          message: `You arrive at ${item.to} but the next leg departs from ${next.item.from}.`,
+          suggestion: `Add a connecting trip from ${item.to} to ${next.item.from}, or adjust your itinerary.`,
+          icon: '📍'
+        });
+      }
+    }
+  });
+
+  const activeIssues = issues.filter(i => !resolved.includes(i.id));
+  const typeIcons = { flight: '✈️', train: '🚆', hotel: '🏨', cab: '🚗' };
+
+  return (
+    <>
+      <div className="row between">
+        <div>
+          <span className="eyebrow">SMART TRAVEL PLANNER</span>
+          <h2>Self-Healing Itinerary</h2>
+          <p className="muted">
+            Your saved trips organized as a timeline. Issues are detected automatically.
+          </p>
+        </div>
+      </div>
+
+      {activeIssues.length > 0 && (
+        <div className="card section-card" style={{ borderLeft: '4px solid #e68a32' }}>
+          <h3>⚡ {activeIssues.length} issue{activeIssues.length > 1 ? 's' : ''} detected</h3>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            The itinerary has been analyzed for schedule conflicts, missing inventory, and connection gaps.
+          </p>
+          {activeIssues.map(issue => (
+            <div key={issue.id} className="card result-card" style={{
+              borderLeft: `3px solid ${issue.severity === 'high' ? '#d94c4c' : '#e68a32'}`,
+              marginBottom: 8
+            }}>
+              <div>
+                <span style={{ fontSize: 18, marginRight: 8 }}>{issue.icon}</span>
+                <span className={`badge ${issue.severity === 'high' ? '' : 'success'}`}>
+                  {issue.type.replace(/-/g, ' ')}
+                </span>
+                <p style={{ margin: '8px 0 4px' }}><strong>{issue.message}</strong></p>
+                <p className="muted" style={{ fontSize: 13 }}>💡 {issue.suggestion}</p>
+              </div>
+              <div className="result-actions">
+                <button className="btn ghost" onClick={() => markResolved(issue.id)}>
+                  Dismiss
+                </button>
+                <button className="btn primary" onClick={onSearch}>
+                  Find alternative
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeIssues.length === 0 && trips.length > 0 && (
+        <div className="card section-card" style={{ borderLeft: '4px solid #179b67' }}>
+          <h3>✅ Itinerary looks good</h3>
+          <p className="muted">No scheduling conflicts or missing items detected.</p>
+        </div>
+      )}
+
+      <div className="card section-card">
+        <h3>Travel Timeline</h3>
+
+        {trips.length === 0 ? (
+          <div className="card empty-state">
+            <CalendarSync />
+            <h3>No trips in your itinerary</h3>
+            <p className="muted">Save travel options from Compare Travel to build your itinerary.</p>
+            <button className="btn primary" onClick={onSearch}>
+              Start comparing
+            </button>
+          </div>
+        ) : (
+          <div className="timeline">
+            {trips.map((trip, i) => {
+              const item = trip.item || {};
+              const label = item.airline || item.name || item.kind || trip.type;
+              const route = item.from && item.to ? `${item.from} → ${item.to}` : item.city || '';
+              const time = [item.depart, item.arrive].filter(Boolean).join(' → ');
+
+              return (
+                <div className="timeline-item" key={trip.id}>
+                  <span className="timeline-dot" />
+                  <div className="card" style={{ flex: 1 }}>
+                    <div className="row between wrap">
+                      <div>
+                        <span style={{ marginRight: 8 }}>{typeIcons[trip.type] || '📌'}</span>
+                        <span className="badge">{trip.type}</span>
+                        <b style={{ marginLeft: 8 }}>{label}</b>
+                      </div>
+                      <strong>{INR(trip.price)}</strong>
+                    </div>
+                    <p className="muted" style={{ margin: '6px 0 0' }}>
+                      {route}{time ? ` · ${time}` : ''}{item.duration ? ` · ${item.duration}` : ''}
+                      {' · Saved '}{new Date(trip.createdAt).toLocaleDateString()}
+                    </p>
+                    {activeIssues.some(iss => iss.tripId === trip.id) && (
+                      <span className="badge" style={{ marginTop: 6, background: '#fff3e0', color: '#e65100' }}>
+                        ⚠️ Has issues
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="stats-grid" style={{ marginTop: 16 }}>
+        <Stat label="Total trips" value={trips.length} />
+        <Stat label="Estimated cost" value={INR(trips.reduce((s, t) => s + (Number(t.price) || 0), 0))} />
+        <Stat label="Issues" value={activeIssues.length} />
+      </div>
     </>
   );
 }

@@ -1,0 +1,33 @@
+// Trusted-domain allowlist for demo classification. Keep domains lowercase and without www.
+export const TRUSTED_DOMAINS = [
+  { domain:"irctc.co.in", name:"IRCTC", category:"Rail" },
+  { domain:"makemytrip.com", name:"MakeMyTrip", category:"Travel booking" },
+  { domain:"goibibo.com", name:"Goibibo", category:"Travel booking" },
+  { domain:"redbus.in", name:"redBus", category:"Bus" },
+  { domain:"cleartrip.com", name:"Cleartrip", category:"Travel booking" },
+  { domain:"easemytrip.com", name:"EaseMyTrip", category:"Travel booking" },
+  { domain:"ixigo.com", name:"ixigo", category:"Travel booking" },
+  { domain:"yatra.com", name:"Yatra", category:"Travel booking" },
+  { domain:"booking.com", name:"Booking.com", category:"Hotels" },
+  { domain:"agoda.com", name:"Agoda", category:"Hotels" },
+  { domain:"skyscanner.co.in", name:"Skyscanner", category:"Flights" },
+  { domain:"airindia.com", name:"Air India", category:"Airline" },
+  { domain:"goindigo.in", name:"IndiGo", category:"Airline" },
+  { domain:"spicejet.com", name:"SpiceJet", category:"Airline" },
+  { domain:"akasaair.com", name:"Akasa Air", category:"Airline" },
+  { domain:"airvistara.com", name:"Air Vistara", category:"Airline" },
+  { domain:"uber.com", name:"Uber", category:"Cab" },
+  { domain:"olacabs.com", name:"Ola", category:"Cab" },
+  { domain:"oyorooms.com", name:"OYO", category:"Hotels" },
+  { domain:"airbnb.co.in", name:"Airbnb", category:"Stays" },
+  { domain:"expedia.com", name:"Expedia", category:"Travel booking" },
+  { domain:" kayak.com", name:"KAYAK", category:"Flights" },
+  { domain:"trip.com", name:"Trip.com", category:"Travel booking" },
+  { domain:"hotels.com", name:"Hotels.com", category:"Hotels" },
+  { domain:"rome2rio.com", name:"Rome2Rio", category:"Route planning" },
+  { domain:"amtrak.com", name:"Amtrak", category:"Rail" },
+  { domain:"bahn.com", name:"Deutsche Bahn", category:"Rail" },
+  { domain:"delta.com", name:"Delta Air Lines", category:"Airline" },
+].map(item => ({ ...item, domain: item.domain.trim() }));
+
+export default TRUSTED_DOMAINS;
