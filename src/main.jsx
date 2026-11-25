@@ -715,9 +715,9 @@ function App() {
   // Route protection
 
   if (
-    (!isAuth && (route.startsWith('/user') || route.startsWith('/admin'))) ||
-    (isAuth && route.startsWith('/admin') && !isAdmin) ||
-    (isAuth && route.startsWith('/user') && isAdmin)
+    (!isAuth && (route.startsWith('/user/') || route.startsWith('/admin/'))) ||
+    (isAuth && route.startsWith('/admin/') && !isAdmin) ||
+    (isAuth && route.startsWith('/user/') && isAdmin)
   ) {
     return (
       <main className="page">
