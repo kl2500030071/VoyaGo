@@ -1,0 +1,3 @@
+function countUp(el,target){let start=0,t0=null;const run=t=>{if(!t0)t0=t;const p=Math.min(1,(t-t0)/900);el.textContent=Math.round(start+(target-start)*(1-Math.pow(1-p,3))).toLocaleString('en-IN');if(p<1)requestAnimationFrame(run)};requestAnimationFrame(run)}
+function initMagnetic(){document.querySelectorAll('.magnetic').forEach(b=>b.addEventListener('pointermove',e=>{const r=b.getBoundingClientRect();b.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.05}px,${(e.clientY-r.top-r.height/2)*.05}px)`}));document.addEventListener('mouseout',e=>{if(e.target.matches('.magnetic'))e.target.style.transform=''})}
+document.addEventListener('DOMContentLoaded',initMagnetic);
