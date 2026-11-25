@@ -2,7 +2,7 @@
 
 VoyaGo is a frontend travel comparison application built with **React + Vite**. It lets travellers search and compare flights, trains, hotels, and cabs across seeded demo inventory, save trips, set price alerts, and continue to external booking partners, alongside a dedicated Admin module.
 
-**Live Demo:** [https://voya-go.vercel.app/](https://voya-cpgg6zatb-rookie-rebels.vercel.app/)
+**Live Demo:** [https://voya-go.vercel.app/](https://voya-go.vercel.app/)
 
 ## Features
 
