@@ -919,7 +919,7 @@ function App() {
 
         <main>
 
-          <section className="hero aurora">
+          <section className="hero aurora hero-landing">
 
             <div className="container hero-grid">
 
@@ -937,7 +937,7 @@ function App() {
                   , without the tab overload.
                 </h1>
 
-                <p>
+                <p className="hero-sub">
                   Compare flights, trains, hotels and cabs
                   in one place, then continue to the partner
                   to book.
@@ -961,7 +961,12 @@ function App() {
 
                   </div>
 
-                  <div className="search-fields">
+                  <div
+                    className={
+                      'hero-search-fields' +
+                      (['hotel', 'cab'].includes(search.type) ? ' is-city' : '')
+                    }
+                  >
 
                     <label>
                       {['hotel', 'cab'].includes(search.type)
@@ -1029,7 +1034,7 @@ function App() {
                     </label>
 
                     <button
-                      className="btn primary"
+                      className="btn primary hero-search-btn"
                       onClick={() => {
                         if (!isAuth) {
                           setForm({ name: '', email: '', password: '' });
@@ -1043,23 +1048,31 @@ function App() {
                         }
                       }}
                     >
-                      Compare prices
+                      <Search size={16} /> Compare prices
                     </button>
 
                   </div>
 
                 </div>
 
-                <button
-                  className="btn primary"
-                  onClick={() => go('/signup')}
-                >
-                  Create free account
-                </button>
+                <div className="hero-actions">
+                  <button
+                    className="btn primary"
+                    onClick={() => go('/signup')}
+                  >
+                    Create free account
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() => go('/login')}
+                  >
+                    Already have an account? Log in
+                  </button>
+                </div>
 
               </div>
 
-              <div className="card gradient-border">
+              <div className="card gradient-border timeline-panel">
 
                 <span className="badge success">
                   SELF-HEALING ITINERARY
@@ -1075,6 +1088,7 @@ function App() {
                 <div className="timeline">
 
                   <div className="timeline-item">
+                    <span className="timeline-dot" />
                     <div className="card">
                       <b>Flight arrival</b>
                       <p>Delhi → Mumbai</p>
@@ -1082,6 +1096,7 @@ function App() {
                   </div>
 
                   <div className="timeline-item">
+                    <span className="timeline-dot" />
                     <div className="card">
                       <b>Cab pickup</b>
                       <p>Arrival + 30 minutes</p>
@@ -1089,6 +1104,7 @@ function App() {
                   </div>
 
                   <div className="timeline-item">
+                    <span className="timeline-dot" />
                     <div className="card">
                       <b>Hotel check-in</b>
                       <p>Connected itinerary update</p>
@@ -1103,7 +1119,7 @@ function App() {
 
           </section>
 
-          <section className="section" id="features">
+          <section className="section features-section" id="features">
 
             <div className="container">
 
@@ -1111,7 +1127,7 @@ function App() {
                 BUILT FOR COMPARISON
               </span>
 
-              <h2>Less searching. Better decisions.</h2>
+              <h2 className="features-head">Less searching. Better decisions.</h2>
 
               <div className="grid grid-4">
 
@@ -1121,8 +1137,8 @@ function App() {
                   ['Hotels', Hotel, 'Compare stays by city.'],
                   ['Cabs', Car, 'Find local ride options.']
                 ].map(([name, Icon, description]) => (
-                  <div className="card" key={name}>
-                    <Icon />
+                  <div className="card feature-card" key={name}>
+                    <div className="feature-icon"><Icon size={20} /></div>
                     <h3>{name}</h3>
                     <p>{description}</p>
                   </div>
